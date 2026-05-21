@@ -402,22 +402,38 @@ export default function FakeNewsHunter() {
     sel.removeAllRanges();
   };
 
-  const renderWithHighlights = (text, ranges) => {
-    if (!ranges || ranges.length === 0) return text;
-    const parts = [];
-    let last = 0;
-    const sorted = ranges.slice().sort((a,b)=>a.start-b.start);
-    sorted.forEach((r, idx) => {
-      if (r.start > last) parts.push(text.slice(last, r.start));
-      parts.push(
-        <span key={`h-${idx}`} style={{ background: '#fcd34d', color: '#0f172a', fontWeight: 700 }}>
-          {text.slice(r.start, r.end)}
+  const wordTokens = currentQuestion?.content.split(/(\s+)/).map((text) => ({
+    text,
+    isSpace: /^\s+$/.test(text)
+  })) || [];
+
+  const tokensWithPosition = [];
+  let charPos = 0;
+  wordTokens.forEach((token) => {
+    const start = charPos;
+    const end = charPos + token.text.length;
+    tokensWithPosition.push({ ...token, start, end });
+    charPos = end;
+  });
+
+  const renderWordContent = () => {
+    let wordIndex = -1;
+    return tokensWithPosition.map((token, tokenIndex) => {
+      if (token.isSpace) return token.text;
+      wordIndex += 1;
+      const selectionActive = selectedWordIndices.includes(wordIndex);
+      const highlightActive = highlights.some((h) => h.start < token.end && h.end > token.start);
+      return (
+        <span
+          key={`${tokenIndex}-${token.text}`}
+          className={`word-token ${selectionActive || highlightActive ? 'word-token--selected' : ''}`}
+          onClick={() => handleWordClick(wordIndex)}
+          style={{ cursor: 'pointer' }}
+        >
+          {token.text}
         </span>
       );
-      last = r.end;
     });
-    if (last < text.length) parts.push(text.slice(last));
-    return parts;
   };
 
   return (
@@ -475,7 +491,7 @@ export default function FakeNewsHunter() {
               {/* KHU VỰC HIỂN THỊ BÀI BÁO (Bản đầy đủ, nguyên văn) */}
               <div style={{ ...styles.wordsContainer, display: 'block' }} onMouseUp={handleArticleMouseUp} ref={articleRef}>
                 <article style={{ margin: 0, color: '#cbd5e1', lineHeight: 1.9, whiteSpace: 'pre-wrap', fontSize: '15px' }}>
-                  {renderWithHighlights(currentQuestion?.content || '', highlights)}
+                  {renderWordContent()}
                 </article>
               </div>
 

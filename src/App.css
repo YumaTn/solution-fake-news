@@ -141,6 +141,23 @@
   font-size: 1.2rem;
 }
 
+.word-token {
+  display: inline-flex;
+  padding: 2px 4px;
+  border-radius: 8px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.word-token:hover {
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.word-token--selected {
+  background: rgba(245, 158, 11, 0.24);
+  color: #fff;
+  font-weight: 700;
+}
+
 .hero-button,
 .hero-link {
   background: linear-gradient(135deg, #38bdf8 0%, #22c55e 100%);
