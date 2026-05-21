@@ -19,7 +19,6 @@ export default function FakeNewsHunter() {
   const [timeLeft, setTimeLeft] = useState(60);
   const [gameState, setGameState] = useState("playing"); // playing, answered, summary
 
-  const [selectedWordIndices, setSelectedWordIndices] = useState([]);
   const [highlights, setHighlights] = useState([]); // array of {start, end}
   const [foundCount, setFoundCount] = useState(0);
   const [feedback, setFeedback] = useState({ text: "Hãy chạm hoặc click vào các từ khóa quan trọng để bôi đậm.", type: "info" });
@@ -165,12 +164,11 @@ export default function FakeNewsHunter() {
 
   useEffect(() => {
     if (gameState === "playing" && currentQuestion) {
-      setSelectedWordIndices([]);
       setHighlights([]);
       setFoundCount(0);
       setTimeLeft(60);
       setResultMessage(null);
-      setFeedback({ text: "Hãy chạm hoặc click vào các từ khóa quan trọng để bôi đậm.", type: "info" });
+      setFeedback({ text: "Hãy chạm hoặc giữ để chọn vùng và nổi bật chứng cứ.", type: "info" });
 
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
@@ -278,47 +276,6 @@ export default function FakeNewsHunter() {
     return mergeRanges(out);
   };
 
-  const handleWordClick = (index) => {
-    if (gameState !== "playing") return;
-    setSelectedWordIndices((prevSelected) => {
-      const isSelected = prevSelected.includes(index);
-      const nextSelected = isSelected ? prevSelected.filter((i) => i !== index) : [...prevSelected, index];
-      checkProgress(nextSelected);
-      return nextSelected;
-    });
-  };
-
-  const checkProgress = (currentIndices) => {
-
-    const selectedTextCombined = currentIndices
-      .sort((a, b) => a - b)
-      .map((i) => wordsArray[i].toLowerCase())
-      .join(" ");
-
-    // Giới hạn không cho bôi bừa bãi quá nửa bài báo
-    if (currentIndices.length > wordsArray.length * 0.5) {
-      setFeedback({ text: "⚠️ CẢNH BÁO: Bạn đang bôi đậm quá nhiều từ! Hãy nhấn Hoàn tác bớt.", type: "warning" });
-      return;
-    }
-
-    let matchCount = 0;
-    currentQuestion.requiredKeywords.forEach((keyword) => {
-      const cleanKeyword = keyword.toLowerCase().replace(/[,.]/g, "");
-      const cleanSelectedText = selectedTextCombined.replace(/[,.]/g, "");
-      if (cleanSelectedText.includes(cleanKeyword)) matchCount++;
-    });
-
-    setFoundCount(matchCount);
-
-    if (matchCount > foundCount) {
-      setFeedback({ text: "✅ Chính xác! Bạn vừa tìm ra một manh mối quan trọng.", type: "success" });
-    } else if (matchCount === currentQuestion.requiredKeywords.length) {
-      setFeedback({ text: "🎉 XUẤT SẮC! Đã tìm đủ chứng cứ pháp lý. Hãy đưa ra kết luận!", type: "ready" });
-    } else {
-      setFeedback({ text: "Tìm thêm các từ khóa liên quan đến thời gian, nguồn tin hoặc số liệu...", type: "info" });
-    }
-  };
-
   // New: check progress from plain text (used by character-based highlights)
   const checkProgressFromText = (selectedText) => {
     const cleanSelectedText = (selectedText || "").toLowerCase().replace(/[,.]/g, "");
@@ -375,7 +332,7 @@ export default function FakeNewsHunter() {
     );
   };
 
-  const evidenceSelected = selectedWordIndices.length > 0 || highlights.length > 0;
+  const evidenceSelected = highlights.length > 0;
 
   const handleSubmitAnswer = (userChoice) => {
     submitResult(userChoice);
@@ -402,38 +359,22 @@ export default function FakeNewsHunter() {
     sel.removeAllRanges();
   };
 
-  const wordTokens = currentQuestion?.content.split(/(\s+)/).map((text) => ({
-    text,
-    isSpace: /^\s+$/.test(text)
-  })) || [];
-
-  const tokensWithPosition = [];
-  let charPos = 0;
-  wordTokens.forEach((token) => {
-    const start = charPos;
-    const end = charPos + token.text.length;
-    tokensWithPosition.push({ ...token, start, end });
-    charPos = end;
-  });
-
-  const renderWordContent = () => {
-    let wordIndex = -1;
-    return tokensWithPosition.map((token, tokenIndex) => {
-      if (token.isSpace) return token.text;
-      wordIndex += 1;
-      const selectionActive = selectedWordIndices.includes(wordIndex);
-      const highlightActive = highlights.some((h) => h.start < token.end && h.end > token.start);
-      return (
-        <span
-          key={`${tokenIndex}-${token.text}`}
-          className={`word-token ${selectionActive || highlightActive ? 'word-token--selected' : ''}`}
-          onClick={() => handleWordClick(wordIndex)}
-          style={{ cursor: 'pointer' }}
-        >
-          {token.text}
+  const renderWithHighlights = (text, ranges) => {
+    if (!ranges || ranges.length === 0) return text;
+    const parts = [];
+    let last = 0;
+    const sorted = ranges.slice().sort((a, b) => a.start - b.start);
+    sorted.forEach((r, idx) => {
+      if (r.start > last) parts.push(text.slice(last, r.start));
+      parts.push(
+        <span key={`h-${idx}`} style={{ background: '#d97706', color: '#fff', fontWeight: 700, borderRadius: '6px', padding: '0 2px' }}>
+          {text.slice(r.start, r.end)}
         </span>
       );
+      last = r.end;
     });
+    if (last < text.length) parts.push(text.slice(last));
+    return parts;
   };
 
   return (
@@ -485,13 +426,13 @@ export default function FakeNewsHunter() {
             <div>
               {/** Thanh tương tác */}
               <div style={styles.interactiveBar}>
-                <span style={{ fontSize: '12px', color: '#64748b' }}>Cơ chế: Kéo thả để chọn vùng, thả chuột để tô vàng</span>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>Cơ chế: Giữ để chọn vùng trên điện thoại, thả chuột để tô vàng.</span>
               </div>
 
               {/* KHU VỰC HIỂN THỊ BÀI BÁO (Bản đầy đủ, nguyên văn) */}
-              <div style={{ ...styles.wordsContainer, display: 'block' }} onMouseUp={handleArticleMouseUp} ref={articleRef}>
-                <article style={{ margin: 0, color: '#cbd5e1', lineHeight: 1.9, whiteSpace: 'pre-wrap', fontSize: '15px' }}>
-                  {renderWordContent()}
+              <div style={{ ...styles.wordsContainer, display: 'block', touchAction: 'manipulation' }} onMouseUp={handleArticleMouseUp} onTouchEnd={handleArticleMouseUp} ref={articleRef}>
+                <article style={{ margin: 0, color: '#cbd5e1', lineHeight: 1.9, whiteSpace: 'pre-wrap', fontSize: '15px', userSelect: 'text', WebkitUserSelect: 'text' }}>
+                  {renderWithHighlights(currentQuestion?.content || '', highlights)}
                 </article>
               </div>
 
