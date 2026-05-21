@@ -1,12 +1,15 @@
 import React from "react";
 import { Link, useNavigate, useLocation, useSearchParams, useParams } from "react-router-dom";
-import { quizData } from "../data/quizData";
+import "../css/ResultPage.css"; 
 
 export default function ResultPage() {
   const { outcome } = useParams(); 
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+
+  // Nhận mảng đã xáo trộn từ màn hình Game gửi qua
+  const shuffledQuestions = location.state?.shuffledQuestions || [];
 
   const indexParam = searchParams.get("index");
   const scoreParam = searchParams.get("score");
@@ -19,14 +22,20 @@ export default function ResultPage() {
   const score = Number.isFinite(parsedScore)
     ? parsedScore
     : location.state?.score ?? 0;
+
   const nextIndex = currentIndex + 1;
-  const hasMore = nextIndex < quizData.length;
+  
+  // Kiểm tra độ dài dựa trên mảng ĐÃ XÁO TRỘN
+  const hasMore = nextIndex < shuffledQuestions.length;
   const userChoice = outcome === "true";
-  const actualCorrect = quizData[currentIndex]?.isTrue === userChoice;
+  
+  // Xác định câu hỏi hiện tại từ mảng đã xáo trộn
+  const currentQuestion = shuffledQuestions[currentIndex];
+  const actualCorrect = currentQuestion?.isTrue === userChoice;
 
   const matchedKeywords = location.state?.matchedKeywords || [];
   const wrongKeywords = location.state?.wrongKeywords || [];
-  const requiredCount = (location.state?.requiredCount ?? quizData[currentIndex]?.requiredKeywords.length) || 0;
+  const requiredCount = (location.state?.requiredCount ?? currentQuestion?.requiredKeywords.length) || 0;
 
   const minKeywordsToPass = location.state?.minKeywordsToPass ?? Math.max(1, Math.ceil(requiredCount * 2 / 3));
 
@@ -64,83 +73,65 @@ export default function ResultPage() {
   }
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "24px",
-      background: "radial-gradient(circle at top left, rgba(56,189,248,0.18), transparent 24%), radial-gradient(circle at bottom right, rgba(16,185,129,0.14), transparent 20%), #0f172a",
-      color: "#f8fafc",
-      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    }}>
-      <div style={{
-        width: "100%",
-        maxWidth: "760px",
-        background: "rgba(15,23,42,0.96)",
-        border: "1px solid rgba(148,163,184,0.18)",
-        borderRadius: "28px",
-        boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
-        padding: "36px 34px",
-        overflow: "hidden"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "18px", marginBottom: "20px" }}>
-          <div style={{
-            minWidth: "80px",
-            minHeight: "80px",
-            borderRadius: "24px",
-            display: "grid",
-            placeItems: "center",
-            background: accentColor,
-            color: "#0f172a",
-            fontSize: "2.7rem",
-            boxShadow: `0 18px 40px ${accentColor}33`
-          }}>
+    <div className="result-container">
+      <div 
+        className="result-card" 
+        style={{ 
+          "--accent-color": accentColor, 
+          "--shadow-color": `${accentColor}33` 
+        }}
+      >
+        <div className="result-header">
+          <div className="result-icon-box">
             {icon}
           </div>
           <div>
-            <p style={{ textTransform: "uppercase", letterSpacing: "1.8px", color: "#60a5fa", fontSize: "0.8rem", margin: 0, fontWeight: 700 }}>KẾT QUẢ KIỂM CHỨNG</p>
-            <h1 style={{ fontSize: "2.35rem", margin: "10px 0 0", lineHeight: 1.05, color: "#fff", fontWeight: 800 }}>{title}</h1>
+            <p className="result-tagline">KẾT QUẢ KIỂM CHỨNG</p>
+            <h1 className="result-title">{title}</h1>
           </div>
         </div>
 
-        <div style={{
-          background: "rgba(148,163,184,0.08)",
-          border: "1px solid rgba(148,163,184,0.12)",
-          borderRadius: "22px",
-          padding: "24px 24px 24px",
-          marginBottom: "26px"
-        }}>
-          <p style={{ margin: 0, fontSize: "1rem", lineHeight: 1.75, color: "#cbd5e1" }}>{message}</p>
+        <div className="result-info-box">
+          <p className="result-message">{message}</p>
 
-          {/* ---------------------------------------------------------------------- */}
-          {/* KHU VỰC THAY ĐỔI: HIỂN THỊ TỪ KHÓA TINH XẢO DẠNG GAMING BADGES */}
-          {/* ---------------------------------------------------------------------- */}
-          <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-            
-            {/* Thống kê chung */}
-            <div style={{ color: "#fff", fontSize: "0.95rem", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "10px" }}>
-              Tiến độ chứng cứ: <strong style={{ color: "#38bdf8", fontSize: "1.1rem" }}>{matchedKeywords.length}</strong> / {requiredCount} từ khóa đúng (Yêu cầu để Pass: {minKeywordsToPass})
+          {/* Hiển thị tóm tắt Note nếu đoán sai hoặc thiếu chứng cứ để học hỏi */}
+          {!passed && currentQuestion?.note && (
+            <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '14px', borderLeft: `4px solid ${accentColor}` }}>
+              <strong>Mẹo phân tích:</strong> {currentQuestion.note}
+            </div>
+          )}
+
+          {/* Nguồn kiểm chứng bài báo thực tế */}
+          {currentQuestion?.isTrue && currentQuestion?.url && (
+            <div className="result-url-box">
+              <span className="url-icon">🔗</span>
+              <span className="url-text">
+                Nguồn kiểm chứng thực tế:{" "}
+                <a 
+                  href={currentQuestion.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="url-link"
+                >
+                  Xem bài báo nghiên cứu gốc
+                </a>
+              </span>
+            </div>
+          )}
+
+          <div className="result-stats-wrapper">
+            <div className="result-general-stat">
+              Tiến độ chứng cứ: <strong>{matchedKeywords.length}</strong> / {requiredCount} từ khóa đúng (Yêu cầu để Pass: {minKeywordsToPass})
             </div>
 
-            {/* Danh sách từ khóa ĐÚNG đã chọn */}
             {matchedKeywords.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <span style={{ color: "#4ade80", fontSize: "0.85rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              <div className="keyword-section">
+                <span className="keyword-title-correct">
                   ✓ Chứng cứ chính xác đã thu thập:
                 </span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                <div className="keyword-flex">
                   {matchedKeywords.map((word, idx) => (
-                    <span key={`match-${idx}`} style={{
-                      background: "rgba(34, 197, 94, 0.12)",
-                      color: "#4ade80",
-                      border: "1px solid rgba(34, 197, 94, 0.3)",
-                      padding: "5px 12px",
-                      borderRadius: "10px",
-                      fontSize: "0.85rem",
-                      fontWeight: 600,
-                      boxShadow: "0 2px 8px rgba(34, 197, 94, 0.05)"
-                    }}>
+                    <span key={`match-${idx}`} className="tag-matched">
                       {word}
                     </span>
                   ))}
@@ -148,81 +139,51 @@ export default function ResultPage() {
               </div>
             )}
 
-            {/* Danh sách từ khóa SAI đã chọn */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <span style={{ color: wrongKeywords.length > 0 ? "#f87171" : "#94a3b8", fontSize: "0.85rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            <div className="keyword-section">
+              <span className={wrongKeywords.length > 0 ? "keyword-title-wrong" : "keyword-title-none"}>
                 ✕ Từ khóa nhiễu / Chọn sai:
               </span>
               {wrongKeywords.length > 0 ? (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                <div className="keyword-flex">
                   {wrongKeywords.map((word, idx) => (
-                    <span key={`wrong-${idx}`} style={{
-                      background: "rgba(239, 68, 68, 0.1)",
-                      color: "#f87171",
-                      border: "1px solid rgba(239, 68, 68, 0.25)",
-                      padding: "5px 12px",
-                      borderRadius: "10px",
-                      fontSize: "0.85rem",
-                      fontWeight: 600,
-                      boxShadow: "0 2px 8px rgba(239, 68, 68, 0.05)"
-                    }}>
-                      {word.replace(/[.,!?;:]/g, "")} {/* Làm sạch các dấu câu thừa bám đuôi từ */}
+                    <span key={`wrong-${idx}`} className="tag-wrong">
+                      {word.replace(/[.,!?;:]/g, "")}
                     </span>
                   ))}
                 </div>
               ) : (
-                <span style={{ color: "#64748b", fontSize: "0.9rem", fontStyle: "italic" }}>
+                <span className="txt-italic-none">
                   Tuyệt vời, không chọn nhầm dữ liệu nhiễu nào.
                 </span>
               )}
             </div>
 
           </div>
-          {/* ---------------------------------------------------------------------- */}
-
         </div>
 
-        <div style={{ display: "grid", gap: "16px", gridTemplateColumns: "1fr 1fr" }}>
+        <div className="result-actions-grid">
           <button
             onClick={() => {
               if (!passed) {
-                navigate("/game", { state: { currentIndex, score } });
+                // Làm lại chính câu đó: giữ nguyên currentIndex và truyền ngược lại mảng shuffledQuestions
+                navigate("/game", { 
+                  state: { currentIndex, score, shuffledQuestions } 
+                });
               } else if (hasMore) {
-                navigate("/game", { state: { currentIndex: nextIndex, score } });
+                // Sang câu tiếp theo: chuyển thành nextIndex và truyền ngược lại mảng shuffledQuestions
+                navigate("/game", { 
+                  state: { currentIndex: nextIndex, score, shuffledQuestions } 
+                });
               } else {
                 navigate("/");
               }
             }}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "14px 18px",
-              borderRadius: "14px",
-              fontWeight: 700,
-              color: "#0f172a",
-              background: "#38bdf8",
-              border: "none",
-              cursor: "pointer",
-              boxShadow: "0 12px 28px rgba(56,189,248,0.24)",
-              transition: "transform 0.1s ease"
-            }}
+            className="btn-primary-action"
           >
             {!passed ? "Làm lại" : hasMore ? "Câu tiếp theo" : "Hoàn thành chiến dịch"}
           </button>
           
-          <Link to="/" style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "14px 18px",
-            borderRadius: "14px",
-            fontWeight: 700,
-            color: "#fff",
-            background: "rgba(148,163,184,0.16)",
-            textDecoration: "none",
-            border: "1px solid rgba(148,163,184,0.24)"
-          }}>
+          <Link to="/" className="btn-secondary-link">
             Về trang chủ
           </Link>
         </div>

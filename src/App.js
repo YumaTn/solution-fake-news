@@ -17,8 +17,10 @@ function Home() {
           Nhận dạng bản tin thật / giả, khám phá manh mối và tăng điểm với mỗi quyết định chính xác.
         </p>
         <div className="hero-actions">
-          <Link to="/game" className="hero-button"><span className="button-icon">🚀</span>Bắt đầu trò chơi</Link>
-          <Link to="/" className="hero-link"><span className="button-icon">⚔️</span>Chế độ PK</Link>
+          <Link to="/game" className="hero-button">
+            <span className="button-icon">🚀</span>Bắt đầu trò chơi
+          </Link>
+          {/* Đã loại bỏ button Chế độ PK tại đây */}
         </div>
         <div className="hero-stats">
           <div className="stat-card">
