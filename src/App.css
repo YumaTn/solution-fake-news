@@ -252,3 +252,27 @@
     transform: rotate(360deg);
   }
 }
+
+/* Khung chứa ảnh và chữ nằm ngang hàng nhau */
+.hero-header-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Đổi thành flex-start nếu muốn căn trái */
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+/* Định dạng cho hình ảnh nhân vật thu nhỏ giống Avatar */
+.hero-char-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #38bdf8; /* Viền sáng neon bao quanh hình */
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+}
+
+/* Đảm bảo chữ MindRank không bị nhảy dòng */
+.hero-tag {
+  margin-bottom: 0 !important; /* Triệt tiêu margin cũ nếu có */
+}

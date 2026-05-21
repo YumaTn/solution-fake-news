@@ -2,6 +2,8 @@ import './App.css';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import FakeNewsHunter from './component/FakeNewsHunter';
 import ResultPage from './component/ResultPage';
+// Import hình ảnh nhân vật vào dự án
+import characterImg from '../src/asset/logo.jpg'; 
 
 function Home() {
   return (
@@ -10,7 +12,12 @@ function Home() {
       <div className="background-glow glow-2"></div>
       <div className="background-glow glow-3"></div>
       <div className="hero-card">
-        <div className="hero-tag">MindRank</div>
+        {/* Khu vực Header chứa LOGO hình ảnh đặt kế bên chữ MindRank */}
+        <div className="hero-header-logo">
+          <div className="hero-tag">MindRank</div>
+          <img src={characterImg} alt="MindRank Character" className="hero-char-icon" />
+        </div>
+
         <h1>Chạm vào sự thật. Chặn đứng tin giả.</h1>
         <p>
           Bước vào chiến trường kiểm chứng tin tức với trải nghiệm hấp dẫn và trực quan.
@@ -20,7 +27,6 @@ function Home() {
           <Link to="/game" className="hero-button">
             <span className="button-icon">🚀</span>Bắt đầu trò chơi
           </Link>
-          {/* Đã loại bỏ button Chế độ PK tại đây */}
         </div>
         <div className="hero-stats">
           <div className="stat-card">
@@ -61,7 +67,7 @@ function Home() {
   );
 }
 
-function App() {
+export function App() {
   return (
     <BrowserRouter>
       <Routes>
