@@ -24,22 +24,23 @@ export default function ResultPage() {
   const isTrue = outcome === "true";
   const isFalse = outcome === "false";
   const isCorrect = status === "correct";
+  const isWrong = !isCorrect;
 
   const title = isCorrect
     ? isTrue
       ? "Chính xác! Bạn đã xác định đúng: Tin Thật"
       : "Tuyệt vời! Bạn đã xác định đúng: Tin Giả"
     : isTrue
-      ? "Sai rồi! Đây không phải tin thật"
-      : "Sai rồi! Đây không phải tin giả";
+      ? "Sai rồi! Đây là tin giả"
+      : "Sai rồi! Đây là tin thật";
 
   const message = isCorrect
     ? isTrue
       ? "Bài báo này có đủ dấu hiệu xác thực: nguồn tin minh bạch, thời gian rõ ràng và số liệu được trích dẫn cụ thể."
       : "Bạn đã nắm bắt được dấu hiệu tin giả: lời lẽ thao túng, nguồn ẩn danh và thông tin thiếu rõ ràng."
     : isTrue
-      ? "Quá tiếc! Tin này là tin giả, bạn đã chọn Tin Thật. Hãy xem lại các dấu hiệu xác thực và số liệu." 
-      : "Quá tiếc! Tin này là tin thật, bạn đã chọn Tin Giả. Hãy xem lại nguồn tin và độ rõ ràng của thông tin.";
+      ? "Quá tiếc! Tin này là tin giả, bạn đã chọn Tin Thật. Hãy xem lại các dấu hiệu sai lệch và thử lại." 
+      : "Quá tiếc! Tin này là tin thật, bạn đã chọn Tin Giả. Hãy xem lại nguồn tin và thử lại.";
 
   const accentColor = isTrue ? "#22c55e" : "#ef4444";
   const icon = isTrue ? "✅" : isFalse ? "🛑" : "🔎";
@@ -97,7 +98,9 @@ export default function ResultPage() {
         <div style={{ display: "grid", gap: "16px", gridTemplateColumns: "1fr 1fr" }}>
           <button
             onClick={() => {
-              if (hasMore) {
+              if (isWrong) {
+                navigate("/game", { state: { currentIndex, score } });
+              } else if (hasMore) {
                 navigate("/game", { state: { currentIndex: nextIndex, score } });
               } else {
                 navigate("/");
@@ -117,7 +120,7 @@ export default function ResultPage() {
               boxShadow: "0 12px 28px rgba(56,189,248,0.24)"
             }}
           >
-            {hasMore ? "Câu tiếp theo" : "Hoàn thành chiến dịch"}
+            {isWrong ? "Làm lại" : hasMore ? "Câu tiếp theo" : "Hoàn thành chiến dịch"}
           </button>
           <Link to="/" style={{
             display: "inline-flex",

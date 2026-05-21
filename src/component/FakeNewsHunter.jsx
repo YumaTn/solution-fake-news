@@ -21,6 +21,7 @@ export default function FakeNewsHunter() {
 
   const [highlights, setHighlights] = useState([]); // array of {start, end}
   const [foundCount, setFoundCount] = useState(0);
+  const [showHint, setShowHint] = useState(false);
   const [feedback, setFeedback] = useState({ text: "Hãy chạm hoặc click vào các từ khóa quan trọng để bôi đậm.", type: "info" });
   const [resultMessage, setResultMessage] = useState(null);
 
@@ -166,6 +167,7 @@ export default function FakeNewsHunter() {
     if (gameState === "playing" && currentQuestion) {
       setHighlights([]);
       setFoundCount(0);
+      setShowHint(false);
       setTimeLeft(60);
       setResultMessage(null);
       setFeedback({ text: "Hãy chạm hoặc giữ để chọn vùng và nổi bật chứng cứ.", type: "info" });
@@ -428,6 +430,25 @@ export default function FakeNewsHunter() {
               <div style={styles.interactiveBar}>
                 <span style={{ fontSize: '12px', color: '#64748b' }}>Cơ chế: Giữ để chọn vùng trên điện thoại, thả chuột để tô vàng.</span>
               </div>
+
+              {/* Nút hiển thị gợi ý nếu cần */}
+              {currentQuestion?.hint && (
+                <div style={{ marginBottom: '18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {!showHint ? (
+                    <button
+                      onClick={() => setShowHint(true)}
+                      style={{ width: 'fit-content', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '12px', padding: '10px 16px', fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Không biết? Nhấn để xem gợi ý
+                    </button>
+                  ) : (
+                    <div style={{ background: '#111827', border: '1px solid #334155', borderRadius: '16px', padding: '16px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#38bdf8', marginBottom: '8px' }}>Gợi ý</div>
+                      <div style={{ color: '#cbd5e1', fontSize: '14px', lineHeight: 1.7 }}>{currentQuestion.hint}</div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* KHU VỰC HIỂN THỊ BÀI BÁO (Bản đầy đủ, nguyên văn) */}
               <div style={{ ...styles.wordsContainer, display: 'block', touchAction: 'manipulation' }} onMouseUp={handleArticleMouseUp} onTouchEnd={handleArticleMouseUp} ref={articleRef}>
