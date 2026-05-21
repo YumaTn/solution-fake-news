@@ -1,40 +1,125 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { quizData } from "../data/quizData";
 
 export default function FakeNewsHunter() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const [currentIndex, setCurrentIndex] = useState(() => {
     const indexParam = searchParams.get("index");
     const parsedIndex = indexParam !== null ? Number(indexParam) : NaN;
     return Number.isFinite(parsedIndex) && parsedIndex >= 0 ? parsedIndex : location.state?.currentIndex ?? 0;
   });
+
   const [score, setScore] = useState(() => {
     const scoreParam = searchParams.get("score");
     const parsedScore = scoreParam !== null ? Number(scoreParam) : NaN;
     return Number.isFinite(parsedScore) && parsedScore >= 0 ? parsedScore : location.state?.score ?? 0;
   });
-  const [timeLeft, setTimeLeft] = useState(60);
-  const [gameState, setGameState] = useState("playing"); // playing, answered, summary
 
-  const [highlights, setHighlights] = useState([]); // array of {start, end}
-  const [foundCount, setFoundCount] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [gameState, setGameState] = useState("playing");
+  const [highlights, setHighlights] = useState([]);
   const [showHint, setShowHint] = useState(false);
-  const [feedback, setFeedback] = useState({ text: "Hãy chạm hoặc click vào các từ khóa quan trọng để bôi đậm.", type: "info" });
-  const [resultMessage, setResultMessage] = useState(null);
+
+  // Thêm State để lưu trữ CHÍNH XÁC những cụm từ gợi ý mà user đã click chọn
+  const [activeHintPhrases, setActiveHintPhrases] = useState([]);
 
   const timerRef = useRef(null);
-  const navigate = useNavigate();
-  const currentQuestion = quizData[currentIndex];
   const articleRef = useRef(null);
+  const currentQuestion = quizData[currentIndex];
 
-  // Hệ thống Style định hình Layout cao cấp (Không cần Tailwind)
+  // ----------------------------------------------------------------------
+  // THUẬT TOÁN NLP TÁCH CỤM TỪ TIẾNG VIỆT HOÀN HẢO
+  // ----------------------------------------------------------------------
+  const buildHintOptions = (question) => {
+    if (!question) return [];
+    
+    const realKeywords = question.requiredKeywords || [];
+    const content = question.content || "";
+
+    const stopWords = [
+      "một", "những", "các", "là", "và", "hoặc", "nhưng", "của", "cho", "để", "với", 
+      "từ", "tại", "trên", "trong", "ngoài", "dưới", "trước", "sau", "khi", "đang", 
+      "đã", "sẽ", "thì", "mà", "còn", "bị", "được", "do", "bởi", "vì", "nên", 
+      "cho thấy", "thấy", "có", "này", "kia", "đó", "đây", "năm", "tháng", "ngày", 
+      "đăng", "theo", "nói", "rằng", "về", "lại", "ra", "vào", "đến", "chỉ", "rất", 
+      "cũng", "hơn", "nhất", "như", "việc", "sự", "bằng", "qua", "lên", "xuống"
+    ].sort((a, b) => b.length - a.length);
+
+    let processedContent = ` ${content.toLowerCase()} `;
+    processedContent = processedContent.replace(/[.,;?!()[\]{}"']/g, ' | ');
+
+    stopWords.forEach(word => {
+      const regex = new RegExp(`\\s+${word}\\s+`, 'g');
+      processedContent = processedContent.replace(regex, ' | ');
+      processedContent = processedContent.replace(regex, ' | ');
+    });
+
+    const chunks = processedContent.split('|')
+      .map(c => c.trim())
+      .filter(c => c.length >= 2 && c.split(/\s+/).length <= 5);
+
+    let fakePhrases = [];
+    const addedPhrases = new Set();
+    const contentLower = content.toLowerCase();
+
+    for (let chunk of chunks) {
+      const startIndex = contentLower.indexOf(chunk);
+      if (startIndex !== -1) {
+        const originalChunk = content.substring(startIndex, startIndex + chunk.length);
+        
+        const isOverlap = realKeywords.some(rk => 
+          rk.toLowerCase().includes(chunk) || chunk.includes(rk.toLowerCase())
+        );
+
+        if (!isOverlap && !addedPhrases.has(chunk)) {
+          fakePhrases.push(originalChunk);
+          addedPhrases.add(chunk);
+        }
+      }
+    }
+
+    fakePhrases.sort(() => Math.random() - 0.5);
+    fakePhrases = fakePhrases.slice(0, 5);
+
+    if (fakePhrases.length < 4) {
+      const backupPool = ["Nguồn tin", "Cộng đồng mạng", "Bài viết", "Hình ảnh", "Tài khoản", "Báo cáo", "Nghiên cứu"];
+      for (let word of backupPool) {
+        const isOverlap = realKeywords.some(rk => 
+          rk.toLowerCase().includes(word.toLowerCase()) || word.toLowerCase().includes(rk.toLowerCase())
+        );
+        if (!isOverlap && !addedPhrases.has(word.toLowerCase())) {
+          fakePhrases.push(word);
+          addedPhrases.add(word.toLowerCase());
+        }
+        if (fakePhrases.length >= 5) break;
+      }
+    }
+
+    const allOptions = [...realKeywords, ...fakePhrases];
+
+    const seed = question.id || 0;
+    const seeded = allOptions.slice();
+    for (let i = seeded.length - 1; i > 0; i -= 1) {
+      const r = Math.abs(Math.floor(((seed + i) * 9301 + 49297) % 233280)) / 233280;
+      const j = Math.floor(r * (i + 1));
+      [seeded[i], seeded[j]] = [seeded[j], seeded[i]];
+    }
+    
+    return seeded;
+  };
+
+  const hintOptions = useMemo(() => {
+    return buildHintOptions(currentQuestion);
+  }, [currentQuestion]);
+
   const styles = {
     container: {
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', // Đổi sang nền tối (Dark mode) sang trọng hướng game
+      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -55,7 +140,6 @@ export default function FakeNewsHunter() {
     },
     topBar: {
       display: 'flex',
-      justifyContent: 'between',
       justifyContent: 'space-between',
       alignItems: 'center',
       fontSize: '12px',
@@ -106,34 +190,7 @@ export default function FakeNewsHunter() {
       padding: '20px',
       minHeight: '120px',
       marginBottom: '20px',
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: '8px 10px'
-    },
-    chipBase: {
-      borderRadius: '6px',
-      padding: '2px 6px',
-      cursor: 'pointer',
-      fontSize: '15px',
-      userSelect: 'none',
-      transition: 'all 0.15s'
-    },
-    feedbackBox: (type) => {
-      let bg = 'rgba(51,65,85,0.5)';
-      let border = '#475569';
-      let color = '#94a3b8';
-      if (type === 'success') { bg = 'rgba(16,185,129,0.1)'; border = '#10b981'; color = '#34d399'; }
-      if (type === 'warning') { bg = 'rgba(245,158,11,0.1)'; border = '#f59e0b'; color = '#fbbf24'; }
-      if (type === 'ready') { bg = 'rgba(59,130,246,0.15)'; border = '#3b82f6'; color = '#60a5fa'; }
-      return {
-        borderLeft: `4px solid ${border}`,
-        background: bg,
-        color: color,
-        padding: '16px',
-        borderRadius: '0 12px 12px 0',
-        marginBottom: '20px',
-        fontSize: '14px'
-      };
+      display: 'block'
     },
     gridBtn: {
       display: 'grid',
@@ -161,22 +218,18 @@ export default function FakeNewsHunter() {
     })
   };
 
-  const wordsArray = currentQuestion ? currentQuestion.content.match(/\S+/g) || [] : [];
-
   useEffect(() => {
     if (gameState === "playing" && currentQuestion) {
       setHighlights([]);
-      setFoundCount(0);
+      setActiveHintPhrases([]); // Reset các cụm từ gợi ý đã chọn
       setShowHint(false);
       setTimeLeft(60);
-      setResultMessage(null);
-      setFeedback({ text: "Hãy chạm hoặc giữ để chọn vùng và nổi bật chứng cứ.", type: "info" });
 
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
             clearInterval(timerRef.current);
-            handleTimeOut();
+            setGameState("confirm");
             return 0;
           }
           return prev - 1;
@@ -186,29 +239,54 @@ export default function FakeNewsHunter() {
     return () => clearInterval(timerRef.current);
   }, [currentIndex, gameState]);
 
-  const handleTimeOut = () => {
-    setGameState("confirm");
-    setResultMessage(null);
+  // SỬA ĐỔI TOÀN DIỆN HÀM PHÂN TÍCH TỪ KHÓA: Giữ nguyên cụm từ người chơi đã click
+  const getSelectedKeywordStats = () => {
+    const cleanStr = (str) => (str || "").toLowerCase().replace(/[.,!?;:()\[\]"'’]/g, "").trim();
+    
+    const realKeywords = currentQuestion.requiredKeywords || [];
+    
+    // Phân loại trực tiếp từ mảng `activeHintPhrases` do người chơi click chọn
+    const matchedKeywords = activeHintPhrases.filter(phrase => 
+      realKeywords.some(keyword => cleanStr(phrase) === cleanStr(keyword))
+    );
+
+    const wrongKeywords = activeHintPhrases.filter(phrase => 
+      !realKeywords.some(keyword => cleanStr(phrase) === cleanStr(keyword))
+    );
+
+    return { matchedKeywords, wrongKeywords };
   };
 
   const submitResult = (userChoice) => {
     clearInterval(timerRef.current);
     const isCorrect = userChoice === currentQuestion.isTrue;
-    const allKeywordsFound = foundCount === currentQuestion.requiredKeywords.length;
-    const nextScore = isCorrect ? score + (allKeywordsFound ? 100 : 50) : score;
+    
+    // Gọi hàm phân loại cụm từ nguyên bản mới cập nhật
+    const { matchedKeywords, wrongKeywords } = getSelectedKeywordStats();
+    
+    const minKeywordsToPass = Math.max(1, Math.ceil(currentQuestion.requiredKeywords.length * 2 / 3));
+    const passed = isCorrect;
+    const allKeywordsFound = matchedKeywords.length === currentQuestion.requiredKeywords.length;
+    
+    const nextScore = passed ? score + (allKeywordsFound ? 100 : 50) : score;
     const query = `?index=${currentIndex}&score=${nextScore}`;
 
     navigate(
-      `/result/${userChoice ? "true" : "false"}/${isCorrect ? "correct" : "wrong"}${query}`,
-      { state: { currentIndex, score: nextScore } }
+      `/result/${userChoice ? "true" : "false"}/${passed ? "pass" : "fail"}${query}`,
+      {
+        state: {
+          currentIndex,
+          score: nextScore,
+          matchedKeywords, // Mảng các cụm từ đúng nguyên vẹn ("đăng, tại.")
+          wrongKeywords,   // Mảng các cụm từ sai nguyên vẹn
+          requiredCount: currentQuestion.requiredKeywords.length,
+          minKeywordsToPass,
+          passed
+        }
+      }
     );
   };
 
-  const handleTimeoutConfirm = (userChoice) => {
-    submitResult(userChoice);
-  };
-
-  // Helpers to map DOM Range -> character offsets within article
   const getCharOffset = (container, node, offsetInNode) => {
     let charCount = 0;
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
@@ -249,27 +327,22 @@ export default function FakeNewsHunter() {
     const sorted = ranges.slice().sort((a,b)=>a.start-b.start);
     const out = [];
     for (const r of sorted) {
-      // no overlap
       if (rem.end <= r.start || rem.start >= r.end) {
         out.push({ ...r });
         continue;
       }
-      // rem covers r entirely -> remove
       if (rem.start <= r.start && rem.end >= r.end) {
         continue;
       }
-      // rem is inside r -> split
       if (rem.start > r.start && rem.end < r.end) {
         out.push({ start: r.start, end: rem.start });
         out.push({ start: rem.end, end: r.end });
         continue;
       }
-      // overlap on left side
       if (rem.start <= r.start && rem.end < r.end) {
         out.push({ start: rem.end, end: r.end });
         continue;
       }
-      // overlap on right side
       if (rem.start > r.start && rem.end >= r.end) {
         out.push({ start: r.start, end: rem.start });
         continue;
@@ -278,69 +351,38 @@ export default function FakeNewsHunter() {
     return mergeRanges(out);
   };
 
-  // New: check progress from plain text (used by character-based highlights)
-  const checkProgressFromText = (selectedText) => {
-    const cleanSelectedText = (selectedText || "").toLowerCase().replace(/[,.]/g, "");
+  // Cập nhật cả highlights VÀ mảng các cụm từ text được kích hoạt
+  const handleToggleHintHighlight = (option) => {
+    if (!currentQuestion || !option) return;
+    const contentLower = currentQuestion.content.toLowerCase();
+    const optionLower = option.trim().toLowerCase();
+    
+    const startIndex = contentLower.indexOf(optionLower);
+    if (startIndex === -1) return;
+    
+    const endIndex = startIndex + option.trim().length;
+    const targetRange = { start: startIndex, end: endIndex };
 
-    // prevent selecting too much
-    const maxAllowed = Math.floor(wordsArray.length * 0.5);
-    const selectedWordCount = (selectedText || "").split(/\s+/).filter(Boolean).length;
-    if (selectedWordCount > maxAllowed) {
-      setFeedback({ text: "⚠️ CẢNH BÁO: Bạn đang bôi đậm quá nhiều từ! Hãy nhấn Hoàn tác bớt.", type: "warning" });
-      return;
-    }
+    const isAlreadyHighlighted = highlights.some(
+      (h) => !(targetRange.end <= h.start || targetRange.start >= h.end)
+    );
 
-    let matchCount = 0;
-    currentQuestion.requiredKeywords.forEach((keyword) => {
-      const cleanKeyword = keyword.toLowerCase().replace(/[,.]/g, "");
-      if (cleanSelectedText.includes(cleanKeyword)) matchCount++;
-    });
-
-    setFoundCount(matchCount);
-
-    if (matchCount > foundCount) {
-      setFeedback({ text: "✅ Chính xác! Bạn vừa tìm ra một manh mối quan trọng.", type: "success" });
-    } else if (matchCount === currentQuestion.requiredKeywords.length) {
-      setFeedback({ text: "🎉 XUẤT SẮC! Đã tìm đủ chứng cứ pháp lý. Hãy đưa ra kết luận!", type: "ready" });
+    if (isAlreadyHighlighted) {
+      setHighlights((prev) => subtractRange(prev, targetRange));
+      setActiveHintPhrases((prev) => prev.filter(p => p !== option));
     } else {
-      setFeedback({ text: "Tìm thêm các từ khóa liên quan đến thời gian, nguồn tin hoặc số liệu...", type: "info" });
+      setHighlights((prev) => mergeRanges([...prev, targetRange]));
+      setActiveHintPhrases((prev) => [...prev, option]);
     }
   };
 
-  // When highlights change (character offsets), recompute matched keywords
-  useEffect(() => {
-    if (!currentQuestion) return;
-    if (!highlights || highlights.length === 0) {
-      // reset progress if no highlights
-      setFoundCount(0);
-      setFeedback({ text: "Hãy chạm hoặc click vào các từ khóa quan trọng để bôi đậm.", type: "info" });
-      return;
-    }
-
-    // build selected text from highlights
-    const text = highlights
-      .slice()
-      .sort((a,b)=>a.start-b.start)
-      .map(h => currentQuestion.content.slice(h.start, h.end))
-      .join(' ');
-
-    checkProgressFromText(text);
-  }, [highlights, currentQuestion]);
-  
-
-  const isCorrectKeyword = (word) => {
-    return currentQuestion.requiredKeywords.some((keyword) =>
-      word.toLowerCase().includes(keyword.toLowerCase().split(" ")[0])
-    );
+  const isHintOptionActive = (option) => {
+    return activeHintPhrases.includes(option);
   };
 
   const evidenceSelected = highlights.length > 0;
 
-  const handleSubmitAnswer = (userChoice) => {
-    submitResult(userChoice);
-  };
-
-  const handleArticleMouseUp = (e) => {
+  const handleArticleMouseUp = () => {
     if (gameState !== 'playing') return;
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) return;
@@ -349,13 +391,15 @@ export default function FakeNewsHunter() {
     const offsets = getOffsetsFromRange(range, articleRef.current);
     if (!offsets || offsets.start === offsets.end) return;
 
-    // If selection overlaps existing highlights, subtract (toggle off) that area;
-    // otherwise add the selection as a new highlight.
+    const rawText = currentQuestion.content.slice(offsets.start, offsets.end);
+
     const overlaps = highlights.some((h) => !(offsets.end <= h.start || offsets.start >= h.end));
     if (overlaps) {
       setHighlights((prev) => subtractRange(prev, offsets));
+      setActiveHintPhrases((prev) => prev.filter(p => p !== rawText));
     } else {
       setHighlights((prev) => mergeRanges([...prev, offsets]));
+      setActiveHintPhrases((prev) => [...prev, rawText]);
     }
 
     sel.removeAllRanges();
@@ -369,7 +413,20 @@ export default function FakeNewsHunter() {
     sorted.forEach((r, idx) => {
       if (r.start > last) parts.push(text.slice(last, r.start));
       parts.push(
-        <span key={`h-${idx}`} style={{ background: '#d97706', color: '#fff', fontWeight: 700, borderRadius: '6px', padding: '0 2px' }}>
+        <span
+          key={`h-${idx}`}
+          style={{
+            display: 'inline',
+            background: '#fde047',
+            color: '#111827',
+            fontWeight: 700,
+            borderRadius: '2px',
+            padding: '0 0.15em',
+            boxShadow: 'inset 0 -6px 0 rgba(250,204,21,0.92)',
+            boxDecorationBreak: 'clone',
+            WebkitBoxDecorationBreak: 'clone'
+          }}
+        >
           {text.slice(r.start, r.end)}
         </span>
       );
@@ -383,14 +440,11 @@ export default function FakeNewsHunter() {
     <div style={styles.container}>
       {gameState !== "summary" ? (
         <div style={styles.card}>
-          
-          {/* Top Bar */}
           <div style={styles.topBar}>
             <span>Bản tin kiểm chứng: {currentIndex + 1} / {quizData.length}</span>
             <span style={styles.scoreBadge}>Năng lượng: {score} PTS</span>
           </div>
 
-          {/* Tiêu đề & Hẹn giờ */}
           <div style={styles.headerRow}>
             <div>
               <h1 style={styles.title}>Fake News Hunter 🔍</h1>
@@ -416,22 +470,20 @@ export default function FakeNewsHunter() {
                 <p style={{ margin: '12px 0 0 0', lineHeight: 1.8, fontSize: '15px' }}>{currentQuestion?.content}</p>
               </div>
               <div style={styles.gridBtn}>
-                <button onClick={() => handleTimeoutConfirm(true)} style={styles.actionBtn(true, false)}>
+                <button onClick={() => submitResult(true)} style={styles.actionBtn(true, false)}>
                   Xác nhận: Tin Thật
                 </button>
-                <button onClick={() => handleTimeoutConfirm(false)} style={styles.actionBtn(false, false)}>
+                <button onClick={() => submitResult(false)} style={styles.actionBtn(false, false)}>
                   Xác nhận: Tin Giả
                 </button>
               </div>
             </div>
           ) : (
             <div>
-              {/** Thanh tương tác */}
               <div style={styles.interactiveBar}>
-                <span style={{ fontSize: '12px', color: '#64748b' }}>Cơ chế: Giữ để chọn vùng trên điện thoại, thả chuột để tô vàng.</span>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>Cơ chế: Bôi đen trên bài viết hoặc click trực tiếp các từ khóa gợi ý để bật/tắt bôi vàng.</span>
               </div>
 
-              {/* Nút hiển thị gợi ý nếu cần */}
               {currentQuestion?.hint && (
                 <div style={{ marginBottom: '18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {!showHint ? (
@@ -443,50 +495,64 @@ export default function FakeNewsHunter() {
                     </button>
                   ) : (
                     <div style={{ background: '#111827', border: '1px solid #334155', borderRadius: '16px', padding: '16px' }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#38bdf8', marginBottom: '8px' }}>Gợi ý</div>
-                      <div style={{ color: '#cbd5e1', fontSize: '14px', lineHeight: 1.7 }}>{currentQuestion.hint}</div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#38bdf8', marginBottom: '8px' }}>Gợi ý danh sách từ tiềm năng (Click để Bật/Tắt bôi vàng):</div>
+                      <p style={{ color: '#cbd5e1', fontSize: '14px', lineHeight: 1.7, margin: 0, marginBottom: '12px' }}>{currentQuestion.hint}</p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {hintOptions.map((word, idx) => {
+                          const active = isHintOptionActive(word);
+                          return (
+                            <button
+                              key={`hint-${idx}`}
+                              type="button"
+                              onClick={() => handleToggleHintHighlight(word)}
+                              style={{
+                                background: active ? '#fde047' : '#334155',
+                                color: active ? '#111827' : '#e2e8f0',
+                                padding: '6px 14px',
+                                borderRadius: '99px',
+                                fontSize: '13px',
+                                border: active ? '1px solid #eab308' : '1px solid #475569',
+                                fontWeight: active ? 700 : 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              {word} {active ? '✕' : ''}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* KHU VỰC HIỂN THỊ BÀI BÁO (Bản đầy đủ, nguyên văn) */}
               <div style={{ ...styles.wordsContainer, display: 'block', touchAction: 'manipulation' }} onMouseUp={handleArticleMouseUp} onTouchEnd={handleArticleMouseUp} ref={articleRef}>
                 <article style={{ margin: 0, color: '#cbd5e1', lineHeight: 1.9, whiteSpace: 'pre-wrap', fontSize: '15px', userSelect: 'text', WebkitUserSelect: 'text' }}>
                   {renderWithHighlights(currentQuestion?.content || '', highlights)}
                 </article>
               </div>
 
-              {/* Nút Kết Luận */}
               <div style={styles.gridBtn}>
-                <button onClick={() => handleSubmitAnswer(true)} disabled={!evidenceSelected || gameState !== "playing"} style={styles.actionBtn(true, !evidenceSelected || gameState !== "playing")}> 
+                <button 
+                  onClick={() => submitResult(true)} 
+                  disabled={!evidenceSelected || gameState !== "playing"} 
+                  style={styles.actionBtn(true, !evidenceSelected || gameState !== "playing")}
+                > 
                   Xác thực: Tin Thật
                 </button>
-                <button onClick={() => handleSubmitAnswer(false)} disabled={!evidenceSelected || gameState !== "playing"} style={styles.actionBtn(false, !evidenceSelected || gameState !== "playing")}> 
+                <button 
+                  onClick={() => submitResult(false)} 
+                  disabled={!evidenceSelected || gameState !== "playing"} 
+                  style={styles.actionBtn(false, !evidenceSelected || gameState !== "playing")}
+                > 
                   Bác bỏ: Tin Giả
                 </button>
               </div>
-
-              {gameState === "answered" && resultMessage && (
-                <button
-                  onClick={() => {
-                    if (currentIndex + 1 < quizData.length) {
-                      setCurrentIndex(currentIndex + 1);
-                      setGameState("playing");
-                    } else {
-                      setGameState("summary");
-                    }
-                  }}
-                  style={{ width: '100%', marginTop: '16px', background: '#fff', color: '#0f172a', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}
-                >
-                  {currentIndex + 1 < quizData.length ? "Quét bản tin tiếp theo ➡️" : "Truy xuất kết quả chiến dịch"}
-                </button>
-              )}
             </div>
           )}
         </div>
       ) : (
-        /* MÀN HÌNH TỔNG KẾT */
         <div style={{ ...styles.card, maxWidth: '400px', textAlign: 'center' }}>
           <h2 style={{ fontSize: '24px', fontWeight: 900 }}>🏆 HOÀN THÀNH CHIẾN DỊCH</h2>
           <div style={{ background: '#0f172a', padding: '20px', borderRadius: '16px', margin: '24px 0' }}>
